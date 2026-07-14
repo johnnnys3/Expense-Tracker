@@ -47,6 +47,9 @@ class Transaction(Base):
     __tablename__ = "transactions"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # Nullable + SET NULL (not CASCADE) so purging a user keeps their
+    # transaction history (with description scrubbed, see _purge_user)
+    # instead of deleting it outright.
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     # Nullable + SET NULL (not RESTRICT) so the account-purge job can
     # hard-delete a category without the DB blocking on old transactions —
