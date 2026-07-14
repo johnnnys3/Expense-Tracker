@@ -221,3 +221,63 @@ def test_list_transactions_ordered_by_occurred_at_desc(client, auth_headers, cat
     resp = client.get("/transactions", headers=headers)
     dates = [t["occurred_at"] for t in resp.get_json()]
     assert dates == ["2026-01-20", "2026-01-10", "2026-01-01"]
+
+
+def test_summary_requires_auth(client):
+    resp = client.get("/transactions/summary")
+    assert resp.status_code == 401
+
+
+def test_summary_groups_by_category(client, auth_headers):
+    headers = auth_headers()
+    groceries = client.post(
+        "/categories", headers=headers, json={"name": "Groceries"}
+    ).get_json()["id"]
+    fun = client.post("/categories", headers=headers, json={"name": "Fun"}).get_json()[
+        "id"
+    ]
+    _create_txn(client, headers, groceries, amount="10.00")
+    _create_txn(client, headers, groceries, amount="5.50")
+    _create_txn(client, headers, fun, amount="20.00")
+
+    resp = client.get("/transactions/summary", headers=headers)
+    assert resp.status_code == 200
+    body = {row["category_name"]: row["total"] for row in resp.get_json()}
+    assert body == {"Groceries": "15.50", "Fun": "20.00"}
+
+
+def test_summary_omits_categories_with_no_transactions(client, auth_headers, category_id):
+    headers = auth_headers()
+    empty_category = client.post(
+        "/categories", headers=headers, json={"name": "Unused"}
+    ).get_json()["id"]
+    _create_txn(client, headers, category_id, amount="1.00")
+
+    resp = client.get("/transactions/summary", headers=headers)
+    category_ids = [row["category_id"] for row in resp.get_json()]
+    assert empty_category not in category_ids
+
+
+def test_summary_only_includes_own_transactions(client, auth_headers):
+    headers_a = auth_headers(email="a@example.com")
+    headers_b = auth_headers(email="b@example.com")
+    cat_a = client.post("/categories", headers=headers_a, json={"name": "Food"}).get_json()["id"]
+    cat_b = client.post("/categories", headers=headers_b, json={"name": "Food"}).get_json()["id"]
+    _create_txn(client, headers_a, cat_a, amount="10.00")
+    _create_txn(client, headers_b, cat_b, amount="99.00")
+
+    resp = client.get("/transactions/summary", headers=headers_a)
+    body = resp.get_json()
+    assert len(body) == 1
+    assert body[0]["total"] == "10.00"
+
+
+def test_summary_filters_by_month(client, auth_headers, category_id):
+    headers = auth_headers()
+    _create_txn(client, headers, category_id, amount="10.00", occurred_at="2026-01-15")
+    _create_txn(client, headers, category_id, amount="99.00", occurred_at="2026-02-15")
+
+    resp = client.get("/transactions/summary?month=2026-01", headers=headers)
+    body = resp.get_json()
+    assert len(body) == 1
+    assert body[0]["total"] == "10.00"

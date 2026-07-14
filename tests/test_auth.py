@@ -46,3 +46,34 @@ def test_me_returns_current_user(client, auth_headers):
     resp = client.get("/auth/me", headers=headers)
     assert resp.status_code == 200
     assert resp.get_json()["email"] == "d@example.com"
+
+
+def test_soft_delete_me_requires_auth(client):
+    resp = client.delete("/auth/me")
+    assert resp.status_code == 401
+
+
+def test_soft_delete_me_returns_204(client, auth_headers):
+    headers = auth_headers(email="e@example.com")
+    resp = client.delete("/auth/me", headers=headers)
+    assert resp.status_code == 204
+
+
+def test_login_after_soft_delete_returns_401(client, auth_headers):
+    headers = auth_headers(email="f@example.com", password="pw123")
+    client.delete("/auth/me", headers=headers)
+
+    resp = client.post(
+        "/auth/login", json={"email": "f@example.com", "password": "pw123"}
+    )
+    assert resp.status_code == 401
+
+
+def test_soft_deleted_users_existing_token_still_works_for_me(client, auth_headers):
+    # ponytail note in auth.py: no blocklist, so a token issued before the
+    # delete stays valid until it naturally expires.
+    headers = auth_headers(email="g@example.com")
+    client.delete("/auth/me", headers=headers)
+
+    resp = client.get("/auth/me", headers=headers)
+    assert resp.status_code == 200
