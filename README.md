@@ -50,6 +50,8 @@ All routes except `/auth/register` and `/auth/login` require `Authorization: Bea
 | GET | `/auth/me` | |
 | DELETE | `/auth/me` | Soft-delete: 30-day grace period before hard purge |
 | POST / GET | `/categories` | Per-user; names unique per user, not globally |
+| POST / GET | `/recurring-rules` | Pattern only — doesn't pre-generate `transactions` rows (see Schema below) |
+| GET / PATCH / DELETE | `/recurring-rules/<id>` | 404 (not 403) if it belongs to another user |
 | POST | `/transactions` | |
 | GET | `/transactions` | Filters: `category_id`, `month=YYYY-MM`; pagination: `page`, `limit` (max 100) |
 | GET / PATCH / DELETE | `/transactions/<id>` | 404 (not 403) if it belongs to another user |

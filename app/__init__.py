@@ -22,9 +22,11 @@ def create_app(config_class=Config):
     # initializing until create_app() runs.
     from app.routes.auth import auth_bp
     from app.routes.categories import categories_bp
+    from app.routes.recurring_rules import recurring_rules_bp
     from app.routes.transactions import transactions_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(categories_bp)
+    app.register_blueprint(recurring_rules_bp)
     app.register_blueprint(transactions_bp)
 
     return app
