@@ -2,6 +2,9 @@ import os
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+# Read at import time by app.celery_app; never actually dialed in tests
+# since we invoke task functions directly instead of going through Celery.
+os.environ.setdefault("CELERY_BROKER_URL", "memory://")
 
 import pytest
 from sqlalchemy import event
@@ -31,6 +34,18 @@ def app_instance():
     @event.listens_for(engine, "connect")
     def _enable_fk(dbapi_connection, _):
         dbapi_connection.execute("PRAGMA foreign_keys=ON")
+
+    # app.celery_app calls init_db() itself at import time (it runs
+    # standalone from Flask, without create_app()), which — same as the
+    # route-module problem above — leaves any already-imported app.tasks
+    # bound to a different, table-less engine. Repoint it at the one
+    # actually wired up here.
+    try:
+        import app.tasks as tasks_module
+
+        tasks_module.SessionLocal = db_module.SessionLocal
+    except ImportError:
+        pass
 
     yield flask_app
 
