@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.db import SessionLocal
 from app.models import Category
@@ -62,6 +63,28 @@ def rename_category(category_id):
         category.name = data["name"]
         session.commit()
         return jsonify({"id": category.id, "name": category.name})
+
+
+@categories_bp.route("/<int:category_id>", methods=["DELETE"])
+@jwt_required()
+def delete_category(category_id):
+    user_id = int(get_jwt_identity())
+
+    with SessionLocal() as session:
+        category = session.get(Category, category_id)
+        if category is None or category.user_id != user_id:
+            return jsonify({"error": "not found"}), 404
+
+        session.delete(category)
+        try:
+            session.commit()
+        except IntegrityError:
+            # RecurringRule.category_id is ON DELETE RESTRICT, so the DB
+            # blocks this instead of leaving a rule pointing at nothing.
+            session.rollback()
+            return jsonify({"error": "category is used by a recurring rule"}), 409
+
+        return "", 204
 
 
 @categories_bp.route("", methods=["GET"])

@@ -77,3 +77,50 @@ def test_rename_category_to_duplicate_name_returns_409(client, auth_headers):
 
     resp = client.patch(f"/categories/{cat_id}", headers=headers, json={"name": "Rent"})
     assert resp.status_code == 409
+
+
+def test_delete_category_requires_auth(client):
+    resp = client.delete("/categories/1")
+    assert resp.status_code == 401
+
+
+def test_delete_category(client, auth_headers):
+    headers = auth_headers()
+    created = client.post("/categories", headers=headers, json={"name": "Groceries"})
+    cat_id = created.get_json()["id"]
+
+    resp = client.delete(f"/categories/{cat_id}", headers=headers)
+    assert resp.status_code == 204
+
+    resp = client.get("/categories", headers=headers)
+    assert resp.get_json() == []
+
+
+def test_delete_category_not_owned_returns_404(client, auth_headers):
+    headers_a = auth_headers(email="a@example.com")
+    headers_b = auth_headers(email="b@example.com")
+    created = client.post("/categories", headers=headers_a, json={"name": "Rent"})
+    cat_id = created.get_json()["id"]
+
+    resp = client.delete(f"/categories/{cat_id}", headers=headers_b)
+    assert resp.status_code == 404
+
+
+def test_delete_category_used_by_recurring_rule_returns_409(client, auth_headers):
+    headers = auth_headers()
+    created = client.post("/categories", headers=headers, json={"name": "Rent"})
+    cat_id = created.get_json()["id"]
+    client.post(
+        "/recurring-rules",
+        headers=headers,
+        json={
+            "category_id": cat_id,
+            "amount": "10.00",
+            "frequency": "monthly",
+            "start_date": "2026-01-01",
+        },
+    )
+
+    resp = client.delete(f"/categories/{cat_id}", headers=headers)
+    assert resp.status_code == 409
+    assert "recurring rule" in resp.get_json()["error"]
