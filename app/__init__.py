@@ -1,4 +1,5 @@
 from flask import Flask
+from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 
 from app.config import Config
@@ -16,6 +17,10 @@ def create_app(config_class=Config):
     # Signs/verifies tokens using app.config["JWT_SECRET_KEY"], which falls
     # back to SECRET_KEY if not set separately — no new config needed.
     JWTManager(app)
+
+    # Allows the Vite dev server (different origin/port) to call this API
+    # directly in development.
+    CORS(app, origins=["http://localhost:5173"])
 
     # Imported here (not top-of-file) to avoid a circular import: auth.py
     # will need things from this package, and this package isn't finished
