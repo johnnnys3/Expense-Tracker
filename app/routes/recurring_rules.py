@@ -18,6 +18,7 @@ def _current_user_id() -> int:
 
 
 def _serialize(r: RecurringRule) -> dict:
+    # amount as str (not float) to avoid losing Decimal precision in JSON.
     return {
         "id": r.id,
         "category_id": r.category_id,
@@ -37,6 +38,8 @@ def create_recurring_rule():
         return error
 
     with SessionLocal() as session:
+        # Verify the category exists AND belongs to this user, same as
+        # transactions — prevents attaching a rule to someone else's category.
         category = session.get(Category, data["category_id"])
         if category is None or category.user_id != user_id:
             return jsonify({"error": "invalid category_id"}), 400
@@ -92,6 +95,7 @@ def update_recurring_rule(rule_id):
         if rule is None or rule.user_id != user_id:
             return jsonify({"error": "not found"}), 404
 
+        # Partial update: only touch fields the caller actually sent.
         if "category_id" in data:
             category = session.get(Category, data["category_id"])
             if category is None or category.user_id != user_id:
@@ -120,6 +124,8 @@ def delete_recurring_rule(rule_id):
         if rule is None or rule.user_id != user_id:
             return jsonify({"error": "not found"}), 404
 
+        # No RESTRICT concern here: Transaction.recurring_rule_id is
+        # ON DELETE SET NULL, so existing transactions just detach from the rule.
         session.delete(rule)
         session.commit()
         return "", 204
