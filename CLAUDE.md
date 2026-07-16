@@ -2,14 +2,18 @@
 
 Flask API + React/Vite frontend. See [README.md](README.md) for the full stack.
 
-## Deploy Configuration (configured by /setup-deploy)
-- Platform: Railway (Dockerfile build)
-- Production URL: TBD (set after first Railway deploy)
-- Deploy workflow: auto-deploy on push to main (Railway watches the repo)
+## Deploy Configuration (reference only — not deployed)
+Not hosted anywhere. This is a practice project; hosting was intentionally
+skipped. The Dockerfile, `railway.json`, and CI workflow are kept as working
+reference / local-run scaffolding. To run the container locally:
+`docker build -t expense-tracker . && docker run -p 8000:8000 --env-file .env expense-tracker`.
+If you ever do want a live URL, the Railway topology below is the intended shape.
+
+- Platform (intended): Railway (Dockerfile build), backend API only
 - Deploy status command: HTTP health check on `/`
 - Merge method: squash
-- Project type: web API (backend only on Railway; frontend deploys separately to Vercel)
-- Post-deploy health check: `GET {production-url}/` → `{"status":"ok"}`
+- Project type: web API (frontend would deploy separately to Vercel)
+- Health check: `GET /` → `{"status":"ok"}`
 
 ### Services (Railway)
 - **web** — gunicorn serving `run:app` (Dockerfile). Start command runs
