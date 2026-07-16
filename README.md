@@ -1,6 +1,6 @@
 # Expense Tracker
 
-A backend for logging expenses and seeing totals by month/category. Flask + PostgreSQL, with JWT auth and a Celery-based account-deletion pipeline.
+A full-stack app for logging expenses and seeing totals by month/category. Flask + PostgreSQL API with JWT auth and a Celery-based account-deletion pipeline, plus a React SPA on top.
 
 ## Stack
 
@@ -8,7 +8,10 @@ A backend for logging expenses and seeing totals by month/category. Flask + Post
 - PostgreSQL + SQLAlchemy 2.0 (plain SQLAlchemy, not Flask-SQLAlchemy)
 - Alembic for schema migrations (no `create_all()` — every schema change is a versioned migration)
 - Flask-JWT-Extended for auth
+- Flask-Limiter for auth rate limiting (Redis-backed, per-IP)
+- Input validation on all write paths (`app/validation.py`)
 - Celery + Redis for the account-purge background job
+- React 19 + Vite + React Router frontend (see [Frontend](#frontend))
 
 ## Setup
 
@@ -38,6 +41,8 @@ Run tests (uses an in-memory SQLite DB, no Postgres required):
 ```bash
 pytest
 ```
+
+95 tests cover auth, all four resources, input validation, rate limiting, and the purge job. GitHub Actions (`.github/workflows/ci.yml`) runs the full suite on every push and PR. The suite is order-dependent (shared session-scoped app/engine in `tests/conftest.py`), so it runs as a single whole-collection invocation — no `-n auto` or per-file sharding.
 
 ## API
 
@@ -81,7 +86,16 @@ npm run build    # production build to dist/
 
 Pages: Login, Dashboard, Transactions, Categories, Recurring Rules — one hook per resource (`useAuth`, `useTransactions`, `useCategories`, `useRecurringRules`) wrapping `api.js`. `ProtectedRoute` redirects to `/login` when there's no valid token.
 
+## Deploy
+
+Not hosted — this is a practice project. The `Dockerfile`, `railway.json`, and `.github/workflows/ci.yml` are kept as working reference for an API-only Railway deploy (managed Postgres + Redis; frontend would deploy separately to Vercel). The container runs `alembic upgrade head` then gunicorn. To run it locally:
+
+```bash
+docker build -t expense-tracker .
+docker run -p 8000:8000 --env-file .env expense-tracker
+```
+
 ## Known gaps
 
 - No JWT blocklist — a token issued before a soft-delete stays valid until it naturally expires.
-- Field-presence validation only (`app/validation.py`) — no type/format validation (e.g. malformed `occurred_at` strings aren't rejected before they hit `date.fromisoformat`).
+- The daily account-purge job is wired and tested, but the Celery beat scheduler only runs when started manually — there's no deployed scheduler triggering it on a real schedule.
