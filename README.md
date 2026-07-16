@@ -68,6 +68,19 @@ A few of the foreign-key decisions aren't the obvious defaults, so the reasoning
 - **`users` → `categories`/`recurring_rules`/`transactions` is `CASCADE`, but users aren't actually hard-deleted on request.** `DELETE /auth/me` soft-deletes (sets `deleted_at`); a daily Celery job hard-deletes accounts 30 days past that. When the purge finally runs, it deletes `recurring_rules` and `categories` outright (they can reveal spending patterns), but only scrubs `transactions.description` and lets the `SET NULL` FKs clear `user_id`/`category_id` — the transaction rows themselves survive, anonymized, rather than being deleted.
 - **Ownership checks return 404, not 403.** Trying to read/update/delete another user's transaction returns the same "not found" as a nonexistent id — a 403 would confirm the id exists and just isn't yours.
 
+## Frontend
+
+React SPA in `frontend/` (Vite + React Router), talking to the API above.
+
+```bash
+cd frontend
+npm install
+npm run dev      # dev server (expects the API at the URL configured in src/api.js)
+npm run build    # production build to dist/
+```
+
+Pages: Login, Dashboard, Transactions, Categories, Recurring Rules — one hook per resource (`useAuth`, `useTransactions`, `useCategories`, `useRecurringRules`) wrapping `api.js`. `ProtectedRoute` redirects to `/login` when there's no valid token.
+
 ## Known gaps
 
 - No JWT blocklist — a token issued before a soft-delete stays valid until it naturally expires.
