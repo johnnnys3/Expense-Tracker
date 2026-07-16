@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      # Single whole-suite invocation on purpose. The suite is order-dependent
+      # right now (shared session-scoped app/engine, see tests/conftest.py), so
+      # per-file sharding or `-n auto` would flake. Tests self-provision their
+      # env (in-memory SQLite, memory:// broker) — no Postgres/Redis needed.
+      - run: pytest tests/

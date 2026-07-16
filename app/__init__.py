@@ -1,3 +1,5 @@
+import os
+
 from flask import Flask
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
@@ -31,9 +33,11 @@ def create_app(config_class=Config):
     # registered here, so it can only be wired when enabled at init time.
     limiter.init_app(app)
 
-    # Allows the Vite dev server (different origin/port) to call this API
-    # directly in development.
-    CORS(app, origins=["http://localhost:5173"])
+    # The frontend is deployed separately (Vercel), so in production the API
+    # must allow its origin. CORS_ORIGINS is a comma-separated env list; it
+    # falls back to the local Vite dev server so local dev needs no config.
+    cors_origins = os.environ.get("CORS_ORIGINS", "http://localhost:5173")
+    CORS(app, origins=[o.strip() for o in cors_origins.split(",") if o.strip()])
 
     # Imported here (not top-of-file) to avoid a circular import: auth.py
     # will need things from this package, and this package isn't finished

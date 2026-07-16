@@ -1,0 +1,13 @@
+# Keep the image small and the build reproducible. frontend/ deploys
+# separately; tests/ and local tooling never run in production.
+.git/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.claude/
+.gstack/
+.env
+frontend/
+tests/
+docs/
