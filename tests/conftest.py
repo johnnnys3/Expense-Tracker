@@ -18,6 +18,12 @@ from app.db import Base
 class TestConfig(Config):
     SECRET_KEY = "test-secret-key"
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
+    # Must stay enabled: Flask-Limiter only registers its enforcement hook
+    # when enabled at init_app, and init_app can't run again once the
+    # session-scoped app has served a request. So the limiter is live for the
+    # whole suite and the reset_rate_limiter fixture clears its counters
+    # between tests, so ~50 same-IP logins across the suite don't pile up.
+    RATELIMIT_ENABLED = True
 
 
 @pytest.fixture(scope="session")
@@ -58,6 +64,19 @@ def db(app_instance):
     Base.metadata.create_all(engine)
     yield
     Base.metadata.drop_all(engine)
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter(app_instance):
+    # The limiter is enabled suite-wide (see TestConfig) and its storage is
+    # shared across the session app, so counts would otherwise carry from one
+    # test into the next. Clear them before each test: the rate-limit tests
+    # can then count exactly, and every other test starts with a fresh
+    # allowance no matter how many logins ran before it.
+    from app.extensions import limiter
+
+    with app_instance.app_context():
+        limiter.reset()
 
 
 @pytest.fixture()

@@ -1,9 +1,11 @@
 from flask import Flask
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.config import Config
 from app.db import init_db
+from app.extensions import limiter
 
 
 def create_app(config_class=Config):
@@ -11,12 +13,23 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
+    # Behind Railway's proxy the socket peer is the proxy, not the client, so
+    # request.remote_addr would be the same for everyone — and rate limiting
+    # keys on it. Trust one layer of X-Forwarded-For so remote_addr is the
+    # real client. x_for=1 assumes exactly one proxy in front; raise it only
+    # if more are added, since each trusted hop is one a client could spoof.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1)
+
     # Wire up the DB engine/session using the configured connection string.
     init_db(app.config["SQLALCHEMY_DATABASE_URI"])
 
     # Signs/verifies tokens using app.config["JWT_SECRET_KEY"], which falls
     # back to SECRET_KEY if not set separately — no new config needed.
     JWTManager(app)
+
+    # Reads RATELIMIT_* from app.config. Enforcement is a before_request hook
+    # registered here, so it can only be wired when enabled at init time.
+    limiter.init_app(app)
 
     # Allows the Vite dev server (different origin/port) to call this API
     # directly in development.
@@ -33,5 +46,9 @@ def create_app(config_class=Config):
     app.register_blueprint(categories_bp)
     app.register_blueprint(recurring_rules_bp)
     app.register_blueprint(transactions_bp)
+
+    @app.get("/")
+    def health():
+        return {"status": "ok"}
 
     return app

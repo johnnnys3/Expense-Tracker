@@ -6,19 +6,28 @@ from sqlalchemy import select
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.db import SessionLocal
+from app.extensions import limiter
 from app.models import User
-from app.validation import require_fields
+from app.validation import require_fields, validate_email
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 
 
 @auth_bp.route("/register", methods=["POST"])
+# Per-IP: registration is a once-ever action for a real person, so a low
+# hourly cap stops automated account-spam without touching genuine signups.
+@limiter.limit("3 per hour")
 def register():
     data = request.get_json()
     if error := require_fields(data, "email", "password"):
         return error
     email = data["email"]
     password = data["password"]
+    # Only on register: login deliberately stays format-agnostic so a junk
+    # email gets the same 401 as any other failed credential, rather than a
+    # 400 that distinguishes "malformed" from "wrong".
+    if error := validate_email(email):
+        return error
 
     with SessionLocal() as session:
         # Enforce unique email ourselves so we can return a clean 409
@@ -40,6 +49,9 @@ def register():
 
 
 @auth_bp.route("/login", methods=["POST"])
+# Per-IP: caps online password-guessing. 5/min is well above a real person
+# retrying a mistyped password, far below a useful brute-force rate.
+@limiter.limit("5 per minute")
 def login():
     data = request.get_json()
     if error := require_fields(data, "email", "password"):

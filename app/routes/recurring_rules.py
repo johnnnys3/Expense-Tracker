@@ -1,12 +1,10 @@
-from datetime import date
-
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy import select
 
 from app.db import SessionLocal
 from app.models import Category, RecurringRule
-from app.validation import require_fields
+from app.validation import parse_amount, parse_date, require_fields
 
 recurring_rules_bp = Blueprint(
     "recurring_rules", __name__, url_prefix="/recurring-rules"
@@ -37,6 +35,22 @@ def create_recurring_rule():
     if error := require_fields(data, "category_id", "amount", "frequency", "start_date"):
         return error
 
+    amount, error = parse_amount(data["amount"])
+    if error:
+        return error
+
+    start_date, error = parse_date(data["start_date"], "start_date")
+    if error:
+        return error
+
+    # end_date is optional: absent or null both mean "recurs indefinitely",
+    # so only parse it when the caller actually supplied a value.
+    end_date = None
+    if data.get("end_date") is not None:
+        end_date, error = parse_date(data["end_date"], "end_date")
+        if error:
+            return error
+
     with SessionLocal() as session:
         # Verify the category exists AND belongs to this user, same as
         # transactions — prevents attaching a rule to someone else's category.
@@ -44,14 +58,13 @@ def create_recurring_rule():
         if category is None or category.user_id != user_id:
             return jsonify({"error": "invalid category_id"}), 400
 
-        end_date = data.get("end_date")
         rule = RecurringRule(
             user_id=user_id,
             category_id=data["category_id"],
-            amount=data["amount"],
+            amount=amount,
             frequency=data["frequency"],
-            start_date=date.fromisoformat(data["start_date"]),
-            end_date=date.fromisoformat(end_date) if end_date else None,
+            start_date=start_date,
+            end_date=end_date,
         )
         session.add(rule)
         session.commit()
@@ -103,13 +116,26 @@ def update_recurring_rule(rule_id):
             rule.category_id = data["category_id"]
 
         if "amount" in data:
-            rule.amount = data["amount"]
+            amount, error = parse_amount(data["amount"])
+            if error:
+                return error
+            rule.amount = amount
         if "frequency" in data:
             rule.frequency = data["frequency"]
         if "start_date" in data:
-            rule.start_date = date.fromisoformat(data["start_date"])
+            start_date, error = parse_date(data["start_date"], "start_date")
+            if error:
+                return error
+            rule.start_date = start_date
         if "end_date" in data:
-            rule.end_date = date.fromisoformat(data["end_date"]) if data["end_date"] else None
+            # Explicit null clears the end date (back to recurring forever).
+            if data["end_date"] is None:
+                rule.end_date = None
+            else:
+                end_date, error = parse_date(data["end_date"], "end_date")
+                if error:
+                    return error
+                rule.end_date = end_date
 
         session.commit()
         return jsonify(_serialize(rule))

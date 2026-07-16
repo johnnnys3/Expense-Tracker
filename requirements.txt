@@ -7,15 +7,19 @@ click==8.4.2
 click-didyoumean==0.3.1
 click-plugins==1.1.1.2
 click-repl==0.3.0
+Deprecated==1.3.1
 Flask==3.1.3
 Flask-Cors==5.0.0
 Flask-JWT-Extended==4.7.4
+Flask-Limiter==4.1.1
 iniconfig==2.3.0
 itsdangerous==2.2.0
 Jinja2==3.1.6
 kombu==5.6.2
+limits==5.8.0
 Mako==1.3.12
 MarkupSafe==3.0.3
+ordered-set==4.1.0
 packaging==26.2
 pluggy==1.6.0
 prompt_toolkit==3.0.52
@@ -33,3 +37,4 @@ tzlocal==5.4.4
 vine==5.1.0
 wcwidth==0.8.2
 Werkzeug==3.1.8
+wrapt==2.2.2

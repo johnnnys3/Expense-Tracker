@@ -1,12 +1,10 @@
-from datetime import date
-
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy import func, select
 
 from app.db import SessionLocal
 from app.models import Category, Transaction
-from app.validation import require_fields
+from app.validation import parse_amount, parse_date, parse_month, require_fields
 
 transactions_bp = Blueprint("transactions", __name__, url_prefix="/transactions")
 
@@ -35,6 +33,14 @@ def create_transaction():
     if error := require_fields(data, "category_id", "amount", "occurred_at"):
         return error
 
+    amount, error = parse_amount(data["amount"])
+    if error:
+        return error
+
+    occurred_at, error = parse_date(data["occurred_at"], "occurred_at")
+    if error:
+        return error
+
     with SessionLocal() as session:
         # Verify the category exists AND belongs to this user — otherwise a
         # user could attach their transaction to someone else's category.
@@ -45,8 +51,8 @@ def create_transaction():
         transaction = Transaction(
             user_id=user_id,
             category_id=data["category_id"],
-            amount=data["amount"],
-            occurred_at=date.fromisoformat(data["occurred_at"]),
+            amount=amount,
+            occurred_at=occurred_at,
             description=data.get("description"),
         )
         session.add(transaction)
@@ -71,11 +77,10 @@ def list_transactions():
             query = query.where(Transaction.category_id == category_id)
 
         if month is not None:
-            year, mon = (int(part) for part in month.split("-"))
-            start = date(year, mon, 1)
-            # Roll over to Jan 1 of next year when filtering December,
-            # since there's no month 13 to build an end-of-range date from.
-            end = date(year + 1, 1, 1) if mon == 12 else date(year, mon + 1, 1)
+            bounds, error = parse_month(month)
+            if error:
+                return error
+            start, end = bounds
             query = query.where(
                 Transaction.occurred_at >= start, Transaction.occurred_at < end
             )
@@ -108,9 +113,10 @@ def summary():
         )
 
         if month is not None:
-            year, mon = (int(part) for part in month.split("-"))
-            start = date(year, mon, 1)
-            end = date(year + 1, 1, 1) if mon == 12 else date(year, mon + 1, 1)
+            bounds, error = parse_month(month)
+            if error:
+                return error
+            start, end = bounds
             query = query.where(
                 Transaction.occurred_at >= start, Transaction.occurred_at < end
             )
@@ -158,9 +164,15 @@ def update_transaction(transaction_id):
             transaction.category_id = data["category_id"]
 
         if "amount" in data:
-            transaction.amount = data["amount"]
+            amount, error = parse_amount(data["amount"])
+            if error:
+                return error
+            transaction.amount = amount
         if "occurred_at" in data:
-            transaction.occurred_at = date.fromisoformat(data["occurred_at"])
+            occurred_at, error = parse_date(data["occurred_at"], "occurred_at")
+            if error:
+                return error
+            transaction.occurred_at = occurred_at
         if "description" in data:
             transaction.description = data["description"]
 
